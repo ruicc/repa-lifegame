@@ -1,9 +1,8 @@
 module Main where
 import Data.Array.Repa as R hiding (map)
-import System.Random (randomRIO)
-import Control.Monad (replicateM)
-import System.Posix.Unistd (usleep)
-import Data.Time (getCurrentTime)
+import Data.Array.Repa.Algorithms.Randomish as R (randomishIntArray)
+import Control.Concurrent (threadDelay)
+import Data.Time (getCurrentTime, utctDayTime)
 
 type Board t = R.Array t DIM2 Int
 type BoardSize = (Int, Int)
@@ -17,15 +16,15 @@ boardSize = (47,193)
 
 initLifeGame :: BoardSize -> IO (Board U)
 initLifeGame (x,y) = do
-    ls <- replicateM (x*y) $ randomRIO (0,1)
-    return $ R.fromListUnboxed (R.ix2 x y) ls
+    seed <- getCurrentTime
+    let seed' = fromEnum $ utctDayTime seed
+    return $ R.randomishIntArray (ix2 x y) 0 1 seed'
 
 step :: BoardSize -> Board U -> Board D
 step siz board = R.traverse board id nextStatus
     where
     -- check around cells, count living cells, and return next own status
-    nextStatus g curIx@(Z :. x :. y) = 
-        lifeCheck (g curIx) $ sum $ map indexToStatus (getAround siz (x, y))
+    nextStatus g curIx@(Z :. x :. y) = lifeCheck (g curIx) $ sum $ map indexToStatus (getAround siz (x, y))
         where
             indexToStatus (x', y') =  g $ R.ix2 x' y'
 
@@ -50,8 +49,8 @@ step siz board = R.traverse board id nextStatus
 repeatStep :: BoardSize -> Board U -> IO ()
 repeatStep siz board = do
     board' <- R.computeP $ step siz board  
---    usleep 10000
-    usleep 120000
+--    threadDelay 10000
+    threadDelay 120000
     putStr "\x1b[2J"
     putStr "\x1b[1;1H"
     printListToRect siz $ R.toList board'
